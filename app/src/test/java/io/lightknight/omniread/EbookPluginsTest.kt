@@ -132,6 +132,10 @@ class EbookPluginsTest {
         assertEquals("Đắc Nhân Tâm", res[0].title)
         assertEquals("https://bp.blogspot.com/dacnhantam.jpg", res[0].coverUrl)
 
+        val chapters = runner.getChapters(plugin, res[0].url).getOrThrow()
+        assertEquals(1, chapters.size)
+        assertEquals("https://mega.nz/folder/123", chapters[0].url)
+
         val content = runner.getChapterContent(plugin, res[0].url).getOrThrow()
         assertTrue(content.paragraphs.any { it.contains("nghệ thuật thu phục lòng người") })
         assertTrue(content.paragraphs.any { it.contains("https://mega.nz/folder/123") })

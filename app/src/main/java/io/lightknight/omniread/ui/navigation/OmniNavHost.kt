@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -122,6 +123,7 @@ fun OmniNavHost(
     val showBottomBar = currentRoute in topLevelTabs.map { it.first }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             if (showBottomBar) {
                 Column(
@@ -313,7 +315,7 @@ fun OmniNavHost(
         NavHost(
             navController = navController,
             startDestination = OmniRoutes.LIBRARY,
-            modifier = Modifier.padding(padding)
+            modifier = Modifier.padding(bottom = padding.calculateBottomPadding())
         ) {
             composable(OmniRoutes.LIBRARY) {
                 LibraryScreen(
@@ -457,7 +459,12 @@ fun OmniNavHost(
                         container.ttsChapterPlayer.togglePlayOrStart(itemId, ch, paras, mode)
                     },
                     onToggleTtsPause = { container.ttsChapterPlayer.togglePlayPause() },
-                    onStopTts = { container.ttsChapterPlayer.stop() }
+                    onStopTts = { container.ttsChapterPlayer.stop() },
+                    onOpenImportedBook = { newItemId ->
+                        navController.navigate(OmniRoutes.detail(newItemId)) {
+                            popUpTo(OmniRoutes.LIBRARY) { inclusive = false }
+                        }
+                    }
                 )
             }
             composable(

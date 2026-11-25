@@ -2,6 +2,7 @@ package io.lightknight.omniread.ui.explore
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -12,19 +13,25 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -63,10 +70,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -92,6 +99,7 @@ import io.lightknight.omniread.core.OmniAppContainer
 import io.lightknight.omniread.data.local.ExtensionRepoEntity
 import io.lightknight.omniread.data.local.SourcePluginEntity
 import io.lightknight.omniread.data.model.MediaType
+import io.lightknight.omniread.engine.importer.MegaPublicDownloader
 import io.lightknight.omniread.engine.scraper.CatalogExtensionItem
 import io.lightknight.omniread.engine.scraper.ExtensionCatalogManager
 import io.lightknight.omniread.engine.scraper.ExtensionInstallState
@@ -146,6 +154,12 @@ fun ExploreScreen(
 
     var activeSubTab by remember { mutableIntStateOf(0) } // 0: Nguồn | 1: Tiện ích | 2: Kho & Công cụ
 
+    // Hoisted scroll states so top header collapses cleanly on scroll
+    val sourcesGridState = rememberLazyGridState()
+    val globalListState = rememberLazyListState()
+    val extensionsListState = rememberLazyListState()
+    val reposListState = rememberLazyListState()
+
     // Tab 0 (Nguồn) state
     var sourceGroupFilter by remember { mutableStateOf<MediaType?>(null) }
     var globalSearchMode by remember { mutableStateOf(false) }
@@ -179,6 +193,21 @@ fun ExploreScreen(
 
     var previewState by remember { mutableStateOf<ExplorePreviewState?>(null) }
     var isRetryingChapters by remember { mutableStateOf(false) }
+    var isImportingEbook by remember { mutableStateOf(false) }
+
+    val isScrolledDown by remember(activeSubTab, globalSearchMode) {
+        derivedStateOf {
+            when (activeSubTab) {
+                0 -> if (globalSearchMode) {
+                    globalListState.firstVisibleItemIndex > 0 || globalListState.firstVisibleItemScrollOffset > 64
+                } else {
+                    sourcesGridState.firstVisibleItemIndex > 0 || sourcesGridState.firstVisibleItemScrollOffset > 64
+                }
+                1 -> extensionsListState.firstVisibleItemIndex > 0 || extensionsListState.firstVisibleItemScrollOffset > 64
+                else -> reposListState.firstVisibleItemIndex > 0 || reposListState.firstVisibleItemScrollOffset > 64
+            }
+        }
+    }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -307,90 +336,102 @@ fun ExploreScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            TopAppBar(
-                title = { Text("Khám phá", fontWeight = FontWeight.Bold) },
-                actions = {
-                    if (activeSubTab == 1) {
-                        IconButton(
-                            enabled = !isRefreshingCatalog,
-                            onClick = {
-                                isRefreshingCatalog = true
-                                scope.launch {
-                                    val summary = container.extensionCatalogManager.refreshAllRepos()
-                                    isRefreshingCatalog = false
-                                    val msg = if (summary.failedRepos == 0) {
-                                        "Đã đồng bộ ${summary.refreshedRepos} kho tiện ích mới nhất"
-                                    } else {
-                                        "Đồng bộ ${summary.refreshedRepos} kho, lỗi ${summary.failedRepos}"
-                                    }
-                                    snackbarHostState.showSnackbar(msg)
-                                }
-                            }
-                        ) {
-                            if (isRefreshingCatalog) {
-                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                            } else {
-                                Icon(Icons.Default.Refresh, "Làm mới kho tiện ích")
-                            }
-                        }
-                    }
-                }
-            )
-        }
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .statusBarsPadding()
+                .padding(bottom = padding.calculateBottomPadding())
                 .padding(horizontal = 16.dp)
         ) {
-            // Tachiyomi-style 3 segmented sub-tabs
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    val tabs = listOf(
-                        Triple(0, "Nguồn (${allPlugins.count { it.enabled }})", 0),
-                        Triple(1, "Tiện ích", updateAvailableCount),
-                        Triple(2, "Kho & Công cụ", 0)
-                    )
-                    tabs.forEach { (idx, label, badgeCount) ->
-                        val selected = activeSubTab == idx
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (selected) UmeforTealDeep else Color.Transparent,
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable { activeSubTab = idx }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
+            // Auto-collapsing header + 3-tab strip
+            AnimatedVisibility(visible = !isScrolledDown) {
+                Column(modifier = Modifier.padding(top = 6.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Khám phá",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (activeSubTab == 1) {
+                            IconButton(
+                                enabled = !isRefreshingCatalog,
+                                modifier = Modifier.size(36.dp),
+                                onClick = {
+                                    isRefreshingCatalog = true
+                                    scope.launch {
+                                        val summary = container.extensionCatalogManager.refreshAllRepos()
+                                        isRefreshingCatalog = false
+                                        val msg = if (summary.failedRepos == 0) {
+                                            "Đã đồng bộ ${summary.refreshedRepos} kho tiện ích mới nhất"
+                                        } else {
+                                            "Đồng bộ ${summary.refreshedRepos} kho, lỗi ${summary.failedRepos}"
+                                        }
+                                        snackbarHostState.showSnackbar(msg)
+                                    }
+                                }
                             ) {
-                                Text(
-                                    label,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (selected) UmeforLime else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                if (badgeCount > 0) {
-                                    Spacer(Modifier.width(4.dp))
-                                    Badge(
-                                        containerColor = UmeforLime,
-                                        contentColor = UmeforTealDeep
+                                if (isRefreshingCatalog) {
+                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                } else {
+                                    Icon(Icons.Default.Refresh, "Làm mới kho tiện ích")
+                                }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            val tabs = listOf(
+                                Triple(0, "Nguồn (${allPlugins.count { it.enabled }})", 0),
+                                Triple(1, "Tiện ích", updateAvailableCount),
+                                Triple(2, "Kho & Công cụ", 0)
+                            )
+                            tabs.forEach { (idx, label, badgeCount) ->
+                                val selected = activeSubTab == idx
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (selected) UmeforTealDeep else Color.Transparent,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable { activeSubTab = idx }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(badgeCount.toString(), style = MaterialTheme.typography.labelSmall)
+                                        Text(
+                                            label,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (selected) UmeforLime else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        if (badgeCount > 0) {
+                                            Spacer(Modifier.width(4.dp))
+                                            Badge(
+                                                containerColor = UmeforLime,
+                                                contentColor = UmeforTealDeep
+                                            ) {
+                                                Text(badgeCount.toString(), style = MaterialTheme.typography.labelSmall)
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -399,11 +440,14 @@ fun ExploreScreen(
                 }
             }
 
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(6.dp))
 
             when (activeSubTab) {
                 0 -> SourcesBrowserTab(
                     context = context,
+                    gridState = sourcesGridState,
+                    globalListState = globalListState,
+                    isScrolledDown = isScrolledDown,
                     allPluginsCount = allPlugins.size,
                     enabledPlugins = enabledPlugins,
                     activePlugin = activePlugin,
@@ -448,6 +492,8 @@ fun ExploreScreen(
                 )
 
                 1 -> ExtensionsStoreTab(
+                    listState = extensionsListState,
+                    isScrolledDown = isScrolledDown,
                     catalogItems = catalogItems,
                     allInstalledPlugins = allPlugins,
                     searchQuery = extSearchQuery,
@@ -517,6 +563,7 @@ fun ExploreScreen(
                 )
 
                 else -> ReposAndToolsTab(
+                    listState = reposListState,
                     repos = repos,
                     onOpenYoutubeImport = onOpenYoutubeImport,
                     onOpenSourceBrowser = {
@@ -556,8 +603,31 @@ fun ExploreScreen(
         }
     }
 
+    if (isImportingEbook) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Đang tải & giải nén Ebook") },
+            text = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                    Text(
+                        "Đang tải tệp EPUB/PDF từ nguồn và tách chương để đọc trực tiếp...",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            },
+            confirmButton = {}
+        )
+    }
+
     previewState?.let { state ->
         val (plugin, detail, chapters, fallbackCover, chapterWarning) = state
+        val downloadableEbookChapter = remember(chapters) {
+            chapters.firstOrNull { MegaPublicDownloader.isDownloadableEbookUrl(it.url) }
+        }
         AlertDialog(
             onDismissRequest = { previewState = null },
             title = { Text(detail.title, maxLines = 2) },
@@ -570,8 +640,13 @@ fun ExploreScreen(
                         shape = RoundedCornerShape(8.dp),
                         color = UmeforTealDeep.copy(alpha = 0.85f)
                     ) {
+                        val badgeText = if (downloadableEbookChapter != null) {
+                            "Ebook · Tự động tải & giải nén đầy đủ (${plugin.name})"
+                        } else {
+                            "${detail.mediaType} · ${chapters.size} chương · ${plugin.name}"
+                        }
                         Text(
-                            "${detail.mediaType} · ${chapters.size} chương · ${plugin.name}",
+                            badgeText,
                             color = UmeforLime,
                             style = MaterialTheme.typography.labelMedium,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -634,16 +709,35 @@ fun ExploreScreen(
                 Button(onClick = {
                     previewState = null
                     scope.launch {
-                        val saved = container.webChapterDownloader.addRemoteBookToLibrary(plugin.id, detail, chapters, fallbackCover)
-                        if (chapters.isNotEmpty()) {
-                            container.webChapterDownloader.enqueueBatchDownload(saved.id)
-                            snackbarHostState.showSnackbar("Đã thêm & bắt đầu tải ${chapters.size} chương")
+                        if (downloadableEbookChapter != null) {
+                            isImportingEbook = true
+                            val ebookRes = container.webChapterDownloader.importEbookFromDownloadUrl(
+                                downloadUrl = downloadableEbookChapter.url,
+                                fallbackTitle = detail.title,
+                                fallbackAuthor = detail.author,
+                                fallbackCoverUrl = detail.coverUrl.ifBlank { fallbackCover },
+                                referer = plugin.baseUrl.trimEnd('/') + "/"
+                            )
+                            isImportingEbook = false
+                            ebookRes.onSuccess { saved ->
+                                snackbarHostState.showSnackbar("Đã tải & giải nén Ebook đầy đủ: ${saved.title}")
+                                onOpenBookDetail(saved.id)
+                            }.onFailure { err ->
+                                snackbarHostState.showSnackbar("Lỗi tải Ebook (${err.message}). Đang mở trình duyệt nguồn...")
+                                onOpenSourceBrowser(detail.url)
+                            }
                         } else {
-                            snackbarHostState.showSnackbar("Đã lưu vào thư viện (bấm Cập nhật chương để thử tải lại)")
+                            val saved = container.webChapterDownloader.addRemoteBookToLibrary(plugin.id, detail, chapters, fallbackCover)
+                            if (chapters.isNotEmpty()) {
+                                container.webChapterDownloader.enqueueBatchDownload(saved.id)
+                                snackbarHostState.showSnackbar("Đã thêm & bắt đầu tải ${chapters.size} chương")
+                            } else {
+                                snackbarHostState.showSnackbar("Đã lưu vào thư viện (bấm Cập nhật chương để thử tải lại)")
+                            }
+                            onOpenBookDetail(saved.id)
                         }
-                        onOpenBookDetail(saved.id)
                     }
-                }) { Text(if (chapters.isNotEmpty()) "Lưu & Tải" else "Lưu") }
+                }) { Text(if (downloadableEbookChapter != null) "Tải & Giải nén Ebook" else if (chapters.isNotEmpty()) "Lưu & Tải" else "Lưu") }
             },
             dismissButton = {
                 TextButton(onClick = {
@@ -803,7 +897,7 @@ fun ExploreScreen(
                         value = repoUrl,
                         onValueChange = { repoUrl = it; addErr = "" },
                         label = { Text("URL index.json") },
-                        placeholder = { Text("https://raw.githubusercontent.com/.../index.json") },
+                        placeholder = { Text("https://raw.githubusercontent.com/.../index.json", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -847,6 +941,9 @@ fun ExploreScreen(
 @Composable
 private fun SourcesBrowserTab(
     context: android.content.Context,
+    gridState: LazyGridState,
+    globalListState: LazyListState,
+    isScrolledDown: Boolean,
     allPluginsCount: Int,
     enabledPlugins: List<SourcePluginEntity>,
     activePlugin: SourcePluginEntity?,
@@ -912,36 +1009,38 @@ private fun SourcesBrowserTab(
             return
         }
 
-        // Filter chips + Global Search toggle
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            item {
-                FilterChip(
-                    selected = globalSearchMode,
-                    onClick = { onToggleGlobalSearch(!globalSearchMode) },
-                    label = { Text("Tìm toàn cục") },
-                    leadingIcon = { Icon(Icons.Default.Search, null, Modifier.size(16.dp)) }
-                )
-            }
-            item {
-                FilterChip(
-                    selected = sourceGroupFilter == null,
-                    onClick = { onGroupFilterChange(null) },
-                    label = { Text("Tất cả") }
-                )
-            }
-            item {
-                FilterChip(
-                    selected = sourceGroupFilter == MediaType.NOVEL,
-                    onClick = { onGroupFilterChange(MediaType.NOVEL) },
-                    label = { Text("Truyện chữ") }
-                )
-            }
-            item {
-                FilterChip(
-                    selected = sourceGroupFilter == MediaType.COMIC,
-                    onClick = { onGroupFilterChange(MediaType.COMIC) },
-                    label = { Text("Truyện tranh") }
-                )
+        // Collapse secondary category filter row on scroll, keep source switcher + 1-line search pinned
+        AnimatedVisibility(visible = !isScrolledDown) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                item {
+                    FilterChip(
+                        selected = globalSearchMode,
+                        onClick = { onToggleGlobalSearch(!globalSearchMode) },
+                        label = { Text("Tìm toàn cục") },
+                        leadingIcon = { Icon(Icons.Default.Search, null, Modifier.size(16.dp)) }
+                    )
+                }
+                item {
+                    FilterChip(
+                        selected = sourceGroupFilter == null,
+                        onClick = { onGroupFilterChange(null) },
+                        label = { Text("Tất cả") }
+                    )
+                }
+                item {
+                    FilterChip(
+                        selected = sourceGroupFilter == MediaType.NOVEL,
+                        onClick = { onGroupFilterChange(MediaType.NOVEL) },
+                        label = { Text("Truyện chữ") }
+                    )
+                }
+                item {
+                    FilterChip(
+                        selected = sourceGroupFilter == MediaType.COMIC,
+                        onClick = { onGroupFilterChange(MediaType.COMIC) },
+                        label = { Text("Truyện tranh") }
+                    )
+                }
             }
         }
 
@@ -951,20 +1050,20 @@ private fun SourcesBrowserTab(
                     FilterChip(
                         selected = activePlugin?.id == plugin.id,
                         onClick = { onSelectPlugin(plugin) },
-                        label = { Text(plugin.name) }
+                        label = { Text(plugin.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                     )
                 }
             }
         }
 
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = onSearchQueryChange,
                 modifier = Modifier.weight(1f),
                 singleLine = true,
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(22.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = MaterialTheme.colorScheme.surface,
                     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
@@ -980,20 +1079,22 @@ private fun SourcesBrowserTab(
                 placeholder = {
                     Text(
                         if (globalSearchMode) "Tìm trên ${enabledPlugins.size} nguồn đang bật..."
-                        else "Tìm truyện trên ${activePlugin?.name ?: "web"}..."
+                        else "Tìm trên ${activePlugin?.name ?: "web"}...",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             )
             Spacer(Modifier.width(8.dp))
             Button(
                 onClick = { onSubmitSearch(searchQuery) },
-                shape = RoundedCornerShape(20.dp)
+                shape = RoundedCornerShape(18.dp)
             ) {
                 Icon(Icons.Default.Search, null)
             }
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
         if (isLoading) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
@@ -1025,7 +1126,8 @@ private fun SourcesBrowserTab(
                 }
             } else {
                 LazyColumn(
-                    contentPadding = PaddingValues(bottom = 110.dp),
+                    state = globalListState,
+                    contentPadding = PaddingValues(bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     items(globalResults, key = { it.plugin.id }) { hit ->
@@ -1074,8 +1176,9 @@ private fun SourcesBrowserTab(
             val plugin = activePlugin
             if (plugin != null) {
                 LazyVerticalGrid(
+                    state = gridState,
                     columns = GridCells.Fixed(2),
-                    contentPadding = PaddingValues(bottom = 110.dp),
+                    contentPadding = PaddingValues(bottom = 24.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
@@ -1162,6 +1265,8 @@ private fun RemoteBookCard(
 
 @Composable
 private fun ExtensionsStoreTab(
+    listState: LazyListState,
+    isScrolledDown: Boolean,
     catalogItems: List<CatalogExtensionItem>,
     allInstalledPlugins: List<SourcePluginEntity>,
     searchQuery: String,
@@ -1232,76 +1337,87 @@ private fun ExtensionsStoreTab(
                     }
                 }
             },
-            placeholder = { Text("Tìm tiện ích trong kho (tên, tên miền)...") }
+            placeholder = {
+                Text(
+                    "Tìm tiện ích theo tên hoặc tên miền...",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         )
 
-        Spacer(Modifier.height(6.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            item {
-                FilterChip(selected = mediaFilter == null, onClick = { onMediaFilterChange(null) }, label = { Text("Tất cả") })
-            }
-            item {
-                FilterChip(selected = mediaFilter == MediaType.NOVEL, onClick = { onMediaFilterChange(MediaType.NOVEL) }, label = { Text("Chữ") })
-            }
-            item {
-                FilterChip(selected = mediaFilter == MediaType.COMIC, onClick = { onMediaFilterChange(MediaType.COMIC) }, label = { Text("Tranh") })
-            }
-            item {
-                FilterChip(
-                    selected = langFilter == "vi",
-                    onClick = { onLangFilterChange(if (langFilter == "vi") null else "vi") },
-                    label = { Text("VI") }
-                )
-            }
-            item {
-                FilterChip(
-                    selected = langFilter == "en",
-                    onClick = { onLangFilterChange(if (langFilter == "en") null else "en") },
-                    label = { Text("EN") }
-                )
+        AnimatedVisibility(visible = !isScrolledDown) {
+            Column {
+                Spacer(Modifier.height(6.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item {
+                        FilterChip(selected = mediaFilter == null, onClick = { onMediaFilterChange(null) }, label = { Text("Tất cả") })
+                    }
+                    item {
+                        FilterChip(selected = mediaFilter == MediaType.NOVEL, onClick = { onMediaFilterChange(MediaType.NOVEL) }, label = { Text("Chữ") })
+                    }
+                    item {
+                        FilterChip(selected = mediaFilter == MediaType.COMIC, onClick = { onMediaFilterChange(MediaType.COMIC) }, label = { Text("Tranh") })
+                    }
+                    item {
+                        FilterChip(
+                            selected = langFilter == "vi",
+                            onClick = { onLangFilterChange(if (langFilter == "vi") null else "vi") },
+                            label = { Text("VI") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = langFilter == "en",
+                            onClick = { onLangFilterChange(if (langFilter == "en") null else "en") },
+                            label = { Text("EN") }
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (updates.isNotEmpty()) {
+                        Button(
+                            enabled = !isUpdatingAll,
+                            onClick = { onUpdateAll(updates) },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.SystemUpdate, null, Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (isUpdatingAll) "Đang cập nhật..." else "Cập nhật tất cả (${updates.size})")
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = onRefreshCatalog,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.Refresh, null, Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Kiểm tra cập nhật")
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = onRequestNewSource,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Feedback, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Đề xuất nguồn")
+                    }
+                }
             }
         }
 
         Spacer(Modifier.height(6.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            if (updates.isNotEmpty()) {
-                Button(
-                    enabled = !isUpdatingAll,
-                    onClick = { onUpdateAll(updates) },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.SystemUpdate, null, Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (isUpdatingAll) "Đang cập nhật..." else "Cập nhật tất cả (${updates.size})")
-                }
-            } else {
-                OutlinedButton(
-                    onClick = onRefreshCatalog,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.Refresh, null, Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Kiểm tra cập nhật")
-                }
-            }
-            OutlinedButton(
-                onClick = onRequestNewSource,
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(Icons.Default.Feedback, null, Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Đề xuất nguồn")
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
         LazyColumn(
-            contentPadding = PaddingValues(bottom = 110.dp),
+            state = listState,
+            contentPadding = PaddingValues(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             if (updates.isNotEmpty()) {
@@ -1541,6 +1657,7 @@ private fun CustomPluginRow(
 
 @Composable
 private fun ReposAndToolsTab(
+    listState: LazyListState,
     repos: List<ExtensionRepoEntity>,
     onOpenYoutubeImport: () -> Unit,
     onOpenSourceBrowser: () -> Unit,
@@ -1556,7 +1673,8 @@ private fun ReposAndToolsTab(
     val dateFormatter = remember { SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()) }
 
     LazyColumn(
-        contentPadding = PaddingValues(bottom = 110.dp),
+        state = listState,
+        contentPadding = PaddingValues(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item {

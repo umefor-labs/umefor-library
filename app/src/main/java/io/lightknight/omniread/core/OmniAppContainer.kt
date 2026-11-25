@@ -6,6 +6,7 @@ import io.lightknight.omniread.data.local.OmniReadDatabase
 import io.lightknight.omniread.data.repository.LibraryRepository
 import io.lightknight.omniread.data.storage.FileStorageManager
 import io.lightknight.omniread.engine.importer.LocalImportManager
+import io.lightknight.omniread.engine.importer.MegaPublicDownloader
 import io.lightknight.omniread.engine.player.PlaybackController
 import io.lightknight.omniread.engine.scraper.CloudflareDohDns
 import io.lightknight.omniread.engine.scraper.CloudflareWebViewFetcher
@@ -122,8 +123,20 @@ class OmniAppContainer(val appContext: Context) {
     val directUrlImporter: DirectUrlImporter by lazy {
         DirectUrlImporter(pluginHttpBridge, storageManager, libraryRepository)
     }
+    val megaPublicDownloader: MegaPublicDownloader by lazy {
+        MegaPublicDownloader(httpClient)
+    }
     val webChapterDownloader: WebChapterDownloader by lazy {
-        WebChapterDownloader(appContext, webHttpClient, pluginRunner, libraryRepository, storageManager, webUserAgent)
+        WebChapterDownloader(
+            context = appContext,
+            httpClient = webHttpClient,
+            pluginRunner = pluginRunner,
+            repository = libraryRepository,
+            storage = storageManager,
+            localImportManager = localImportManager,
+            megaDownloader = megaPublicDownloader,
+            userAgent = webUserAgent
+        )
     }
 
     val youtubeDlInitializer: YoutubeDlInitializer by lazy {

@@ -99,6 +99,10 @@ import io.lightknight.omniread.data.model.AppThemeMode
 import io.lightknight.omniread.data.model.NovelReadMode
 import io.lightknight.omniread.data.model.PageTurnEffect
 import io.lightknight.omniread.data.model.TtsMode
+import io.lightknight.omniread.engine.importer.MegaPublicDownloader
+import io.lightknight.omniread.ui.theme.UmeforLime
+import io.lightknight.omniread.ui.theme.UmeforTealDeep
+import androidx.compose.foundation.BorderStroke
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -124,7 +128,8 @@ fun NovelReaderScreen(
     ttsStatusText: String = "",
     onToggleTts: (ChapterEntity, List<String>, TtsMode) -> Unit = { _, _, _ -> },
     onToggleTtsPause: () -> Unit = {},
-    onStopTts: () -> Unit = {}
+    onStopTts: () -> Unit = {},
+    onOpenImportedBook: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
@@ -153,12 +158,22 @@ fun NovelReaderScreen(
     var ttsExportProgressText by remember { mutableStateOf("") }
     var recapDialogText by remember { mutableStateOf<String?>(null) }
     var isGeneratingRecap by remember { mutableStateOf(false) }
+    var isDownloadingFullEbook by remember { mutableStateOf(false) }
 
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
     val currentChapter = chapters.getOrNull(chapterIndex)
+    val detectedEbookUrl = remember(paragraphs, chapters.size, currentChapter?.remoteUrl) {
+        if (chapters.size <= 3) {
+            MegaPublicDownloader.extractDownloadableEbookUrl(
+                paragraphs + listOfNotNull(currentChapter?.remoteUrl)
+            )
+        } else {
+            null
+        }
+    }
     val currentHighlightsMap = remember(highlights, currentChapter?.id) {
         highlights.filter { it.chapterId == currentChapter?.id }.associateBy { it.paragraphIndex }
     }
@@ -422,6 +437,30 @@ fun NovelReaderScreen(
                             fontFamily = fontFamily,
                             color = readerTextColor
                         )
+                        if (detectedEbookUrl != null) {
+                            Spacer(Modifier.height(10.dp))
+                            DirectEbookUnpackCard(
+                                isDownloading = isDownloadingFullEbook,
+                                onDownloadClick = {
+                                    isDownloadingFullEbook = true
+                                    scope.launch {
+                                        val res = container.webChapterDownloader.importEbookFromDownloadUrl(
+                                            downloadUrl = detectedEbookUrl,
+                                            fallbackTitle = item?.title.orEmpty(),
+                                            fallbackAuthor = item?.author.orEmpty(),
+                                            replaceExistingItemId = itemId
+                                        )
+                                        isDownloadingFullEbook = false
+                                        res.onSuccess { saved ->
+                                            snackbarHostState.showSnackbar("Đã giải nén toàn bộ Ebook: ${saved.title}")
+                                            onOpenImportedBook(saved.id)
+                                        }.onFailure { err ->
+                                            snackbarHostState.showSnackbar("Lỗi tải Ebook: ${err.message}")
+                                        }
+                                    }
+                                }
+                            )
+                        }
                         Spacer(Modifier.height(8.dp))
                     }
                     itemsIndexed(paragraphs) { idx, para ->
@@ -596,6 +635,29 @@ fun NovelReaderScreen(
                                     fontFamily = fontFamily,
                                     color = readerTextColor
                                 )
+                                if (detectedEbookUrl != null) {
+                                    DirectEbookUnpackCard(
+                                        isDownloading = isDownloadingFullEbook,
+                                        onDownloadClick = {
+                                            isDownloadingFullEbook = true
+                                            scope.launch {
+                                                val res = container.webChapterDownloader.importEbookFromDownloadUrl(
+                                                    downloadUrl = detectedEbookUrl,
+                                                    fallbackTitle = item?.title.orEmpty(),
+                                                    fallbackAuthor = item?.author.orEmpty(),
+                                                    replaceExistingItemId = itemId
+                                                )
+                                                isDownloadingFullEbook = false
+                                                res.onSuccess { saved ->
+                                                    snackbarHostState.showSnackbar("Đã giải nén toàn bộ Ebook: ${saved.title}")
+                                                    onOpenImportedBook(saved.id)
+                                                }.onFailure { err ->
+                                                    snackbarHostState.showSnackbar("Lỗi tải Ebook: ${err.message}")
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
                             }
                             pageItems.forEach { (globalIdx, para) ->
                                 val isTtsActive = globalIdx == ttsActiveParagraph
@@ -1106,6 +1168,55 @@ fun NovelReaderScreen(
                     ) { Text("Từ điển & Lọc rác") }
                 }
                 Spacer(Modifier.height(10.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun DirectEbookUnpackCard(
+    isDownloading: Boolean,
+    onDownloadClick: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = UmeforTealDeep,
+        border = BorderStroke(1.dp, UmeforLime.copy(alpha = 0.55f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                "Phát hiện liên kết tải Ebook (EPUB / PDF)",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = UmeforLime
+            )
+            Text(
+                "Trang này chỉ chứa phần giới thiệu. Bấm nút bên dưới để tự động tải và giải nén toàn bộ nội dung sách ngay trong app.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFFDCEEE5)
+            )
+            Button(
+                enabled = !isDownloading,
+                onClick = onDownloadClick,
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                if (isDownloading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Đang tải & giải nén Ebook...")
+                } else {
+                    Icon(Icons.Default.FileDownload, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Tải & đọc toàn bộ Ebook ngay")
+                }
             }
         }
     }

@@ -14,19 +14,25 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
@@ -193,11 +199,23 @@ fun LibraryScreen(
             .take(5)
     }
 
+    val gridState = rememberLazyGridState()
+    val listState = rememberLazyListState()
+    val isScrolledDown by remember(isGridView) {
+        derivedStateOf {
+            if (isGridView) {
+                gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 64
+            } else {
+                listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 64
+            }
+        }
+    }
+
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                modifier = Modifier.padding(bottom = 80.dp),
                 onClick = { showImportSheet = true },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -209,111 +227,122 @@ fun LibraryScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .statusBarsPadding()
+                .padding(bottom = padding.calculateBottomPadding())
                 .padding(horizontal = 16.dp)
         ) {
-            Spacer(Modifier.height(10.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = UmeforTealDeep,
-                    border = BorderStroke(1.5.dp, UmeforLime),
-                    modifier = Modifier.size(40.dp)
+            AnimatedVisibility(visible = !isScrolledDown) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
+                    Surface(
+                        shape = RoundedCornerShape(11.dp),
+                        color = UmeforTealDeep,
+                        border = BorderStroke(1.5.dp, UmeforLime),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.MenuBook,
+                                contentDescription = null,
+                                tint = UmeforLime,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Umefor Library",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "${allItems.size} đầu sách · Chữ · Tranh · Audio",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    IconButton(onClick = onOpenStats, modifier = Modifier.size(38.dp)) {
+                        Icon(Icons.Default.BarChart, "Thống kê đọc")
+                    }
+                    IconButton(
+                        onClick = {
+                            showSearchBar = !showSearchBar
+                            if (!showSearchBar) searchQuery = ""
+                        },
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Icon(if (showSearchBar) Icons.Default.Close else Icons.Default.Search, "Tìm kiếm")
+                    }
+                    IconButton(onClick = { isGridView = !isGridView }, modifier = Modifier.size(38.dp)) {
                         Icon(
-                            Icons.AutoMirrored.Filled.MenuBook,
-                            contentDescription = null,
-                            tint = UmeforLime,
-                            modifier = Modifier.size(22.dp)
+                            if (isGridView) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
+                            "Đổi bố cục"
                         )
                     }
                 }
-                Spacer(Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Umefor Library",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "${allItems.size} đầu sách · Chữ · Tranh · Audio",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                IconButton(onClick = onOpenStats) {
-                    Icon(Icons.Default.BarChart, "Thống kê đọc")
-                }
-                IconButton(onClick = {
-                    showSearchBar = !showSearchBar
-                    if (!showSearchBar) searchQuery = ""
-                }) {
-                    Icon(if (showSearchBar) Icons.Default.Close else Icons.Default.Search, "Tìm kiếm")
-                }
-                IconButton(onClick = { isGridView = !isGridView }) {
-                    Icon(
-                        if (isGridView) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
-                        "Đổi bố cục"
-                    )
-                }
             }
 
-            AnimatedVisibility(visible = showSearchBar || searchQuery.isNotEmpty()) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
+            AnimatedVisibility(visible = showSearchBar || searchQuery.isNotEmpty() || isScrolledDown) {
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 10.dp),
-                    singleLine = true,
-                    shape = RoundedCornerShape(24.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                        unfocusedBorderColor = Color.Transparent
-                    ),
-                    leadingIcon = { Icon(Icons.Default.Search, null) },
-                    trailingIcon = {
-                        if (searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { searchQuery = "" }) {
-                                Icon(Icons.Default.Close, "Xóa")
+                        .padding(top = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        shape = RoundedCornerShape(22.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                            unfocusedBorderColor = Color.Transparent
+                        ),
+                        leadingIcon = { Icon(Icons.Default.Search, null) },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { searchQuery = "" }) {
+                                    Icon(Icons.Default.Close, "Xóa")
+                                }
                             }
+                        },
+                        placeholder = {
+                            Text(
+                                "Tìm tên sách, tác giả...",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
-                    },
-                    placeholder = { Text("Tìm tên sách, tác giả...") }
-                )
+                    )
+                    if (isScrolledDown) {
+                        Spacer(Modifier.width(4.dp))
+                        IconButton(onClick = { isGridView = !isGridView }, modifier = Modifier.size(38.dp)) {
+                            Icon(
+                                if (isGridView) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
+                                "Đổi bố cục"
+                            )
+                        }
+                    }
+                }
             }
 
             if (isImporting) {
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(6.dp))
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
 
-            if (recentItems.isNotEmpty() && searchQuery.isBlank() && selectedFilter == null) {
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    "Đọc / Nghe gần đây",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.height(6.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    items(recentItems, key = { "recent_${it.id}" }) { item ->
-                        SpotlightContinueCard(
-                            item = item,
-                            progress = progressMap[item.id],
-                            onContinue = { onOpenBook(item) }
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(6.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 item {
                     FilterChip(
@@ -356,28 +385,7 @@ fun LibraryScreen(
                 }
             }
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 6.dp, bottom = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "Kệ sách (${filteredItems.size})",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                TextButton(
-                    onClick = { sortAlphabetical = !sortAlphabetical },
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                ) {
-                    Icon(Icons.Default.SwapVert, null, Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(if (sortAlphabetical) "Tên A-Z" else "Mới nhất", style = MaterialTheme.typography.labelMedium)
-                }
-            }
-
+            Spacer(Modifier.height(4.dp))
             if (filteredItems.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -393,11 +401,54 @@ fun LibraryScreen(
                 }
             } else if (isGridView) {
                 LazyVerticalGrid(
+                    state = gridState,
                     columns = GridCells.Fixed(2),
-                    contentPadding = PaddingValues(bottom = 144.dp),
+                    contentPadding = PaddingValues(top = 4.dp, bottom = 84.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
+                    if (recentItems.isNotEmpty() && searchQuery.isBlank() && selectedFilter == null) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    "Đọc / Nghe gần đây",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    items(recentItems, key = { "recent_${it.id}" }) { item ->
+                                        SpotlightContinueCard(
+                                            item = item,
+                                            progress = progressMap[item.id],
+                                            onContinue = { onOpenBook(item) }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Kệ sách (${filteredItems.size})",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            TextButton(
+                                onClick = { sortAlphabetical = !sortAlphabetical },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Icon(Icons.Default.SwapVert, null, Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(if (sortAlphabetical) "Tên A-Z" else "Mới nhất", style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
                     items(filteredItems, key = { it.id }) { item ->
                         BookGridCard(
                             item = item,
@@ -408,9 +459,52 @@ fun LibraryScreen(
                 }
             } else {
                 LazyColumn(
-                    contentPadding = PaddingValues(bottom = 144.dp),
+                    state = listState,
+                    contentPadding = PaddingValues(top = 4.dp, bottom = 84.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    if (recentItems.isNotEmpty() && searchQuery.isBlank() && selectedFilter == null) {
+                        item {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    "Đọc / Nghe gần đây",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    items(recentItems, key = { "recent_list_${it.id}" }) { item ->
+                                        SpotlightContinueCard(
+                                            item = item,
+                                            progress = progressMap[item.id],
+                                            onContinue = { onOpenBook(item) }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Kệ sách (${filteredItems.size})",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            TextButton(
+                                onClick = { sortAlphabetical = !sortAlphabetical },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Icon(Icons.Default.SwapVert, null, Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(if (sortAlphabetical) "Tên A-Z" else "Mới nhất", style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
                     items(filteredItems, key = { it.id }) { item ->
                         BookListCard(
                             item = item,
