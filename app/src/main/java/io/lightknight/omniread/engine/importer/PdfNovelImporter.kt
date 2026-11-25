@@ -43,12 +43,13 @@ object PdfNovelImporter {
         val fullText = StringBuilder()
         var titleFromPdf = ""
         var authorFromPdf = ""
+        var totalPages = 0
 
         PDDocument.load(localPdf).use { doc ->
             titleFromPdf = doc.documentInformation?.title?.trim().orEmpty()
             authorFromPdf = doc.documentInformation?.author?.trim().orEmpty()
             val stripper = PDFTextStripper()
-            val totalPages = doc.numberOfPages
+            totalPages = doc.numberOfPages
             val batchSize = 15
             var start = 1
             while (start <= totalPages) {
@@ -58,6 +59,21 @@ object PdfNovelImporter {
                 fullText.append(stripper.getText(doc)).append("\n\n")
                 start = end + 1
             }
+        }
+
+        val extracted = fullText.toString().trim()
+        if (extracted.length < 80 && totalPages >= 1) {
+            val comicOutcome = localPdf.inputStream().use { pdfStream ->
+                PdfComicImporter.import(pdfStream, fileName, storage)
+            }
+            storage.deleteItemCompletely(itemId)
+            val resolvedTitle = titleFromPdf.ifBlank { comicOutcome.item.title }
+            return comicOutcome.copy(
+                item = comicOutcome.item.copy(
+                    title = resolvedTitle,
+                    author = authorFromPdf.ifBlank { comicOutcome.item.author }
+                )
+            )
         }
 
         val chapters = TxtImporter.splitIntoChapters(fullText.toString())

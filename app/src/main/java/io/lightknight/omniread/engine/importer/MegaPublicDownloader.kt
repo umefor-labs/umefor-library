@@ -95,17 +95,13 @@ class MegaPublicDownloader(
             val nodeId = obj["h"]?.jsonPrimitive?.content.orEmpty()
             val encAttr = obj["a"]?.jsonPrimitive?.content.orEmpty()
             val keyField = obj["k"]?.jsonPrimitive?.content.orEmpty()
-            val encNodeKeyB64 = keyField.substringAfter(':', "")
-            if (nodeId.isBlank() || encNodeKeyB64.isBlank()) continue
+            if (nodeId.isBlank() || keyField.isBlank()) continue
 
-            val nodeKeyBytes = runCatching {
-                decryptNodeKey(decodeMegaBase64(encNodeKeyB64), folderKey16)
-            }.getOrNull() ?: continue
-            if (nodeKeyBytes.size < 32) continue
-
-            val (aesKey16, ctrIv16) = deriveFileKeyAndIv(nodeKeyBytes)
-            val fileName = decryptMegaAttributes(encAttr, aesKey16).orEmpty()
-            if (fileName.isBlank()) continue
+            val (fileName, aesKey16, ctrIv16) = resolveFolderFileKeyAndName(
+                keyField = keyField,
+                encAttr = encAttr,
+                folderKey16 = folderKey16
+            ) ?: continue
             val sizeBytes = obj["s"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
             candidates += MegaResolvedFile(
                 nodeId = nodeId,
@@ -301,6 +297,27 @@ class MegaPublicDownloader(
                 val jsonBody = plain.removePrefix("MEGA")
                 json.parseToJsonElement(jsonBody).jsonObject["n"]?.jsonPrimitive?.content?.trim()
             }.getOrNull()
+        }
+
+        fun resolveFolderFileKeyAndName(
+            keyField: String,
+            encAttr: String,
+            folderKey16: ByteArray
+        ): Triple<String, ByteArray, ByteArray>? {
+            for (sharePart in keyField.split('/')) {
+                val encNodeKeyB64 = sharePart.substringAfter(':', "").trim()
+                if (encNodeKeyB64.isBlank()) continue
+                val nodeKeyBytes = runCatching {
+                    decryptNodeKey(decodeMegaBase64(encNodeKeyB64), folderKey16)
+                }.getOrNull() ?: continue
+                if (nodeKeyBytes.size < 32) continue
+                val (aesKey16, ctrIv16) = deriveFileKeyAndIv(nodeKeyBytes)
+                val fileName = decryptMegaAttributes(encAttr, aesKey16).orEmpty()
+                if (fileName.isNotBlank()) {
+                    return Triple(fileName, aesKey16, ctrIv16)
+                }
+            }
+            return null
         }
 
         fun pickBestEbookFileName(candidates: List<String>): Int {

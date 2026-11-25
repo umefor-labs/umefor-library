@@ -80,6 +80,21 @@ class MegaPublicDownloaderTest {
 
         val extractedName = MegaPublicDownloader.decryptMegaAttributes(encAttrB64, aesKey16)
         assertEquals("80 Ngay Vong Quanh The Gioi.epub", extractedName)
+
+        // Multi-share "k" field where first share uses another user key and second uses folderKey
+        val wrongShareEnc = Base64.getUrlEncoder().withoutPadding().encodeToString(ByteArray(32) { 0x55 })
+        val rightShareEnc = Base64.getUrlEncoder().withoutPadding().encodeToString(encryptedNodeKey)
+        val combinedKeyField = "cnRSwJCR:$wrongShareEnc/MuYAgBxS:$rightShareEnc"
+
+        val resolved = MegaPublicDownloader.resolveFolderFileKeyAndName(
+            keyField = combinedKeyField,
+            encAttr = encAttrB64,
+            folderKey16 = folderKey16
+        )
+        assertNotNull(resolved)
+        assertEquals("80 Ngay Vong Quanh The Gioi.epub", resolved?.first)
+        assertArrayEquals(aesKey16, resolved?.second)
+        assertArrayEquals(ctrIv16, resolved?.third)
     }
 
     @Test

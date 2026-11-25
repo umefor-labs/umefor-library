@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Upsert
 import io.lightknight.omniread.data.model.DownloadState
 import io.lightknight.omniread.data.model.MediaType
 import kotlinx.coroutines.flow.Flow
@@ -29,10 +30,10 @@ interface LibraryDao {
     @Query("SELECT * FROM library_items WHERE sourcePluginId = :pluginId AND sourceUrl = :sourceUrl AND isDeleted = 0 LIMIT 1")
     suspend fun findBySource(pluginId: String, sourceUrl: String): LibraryItemEntity?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsert(item: LibraryItemEntity)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsertAll(items: List<LibraryItemEntity>)
 
     @Query("UPDATE library_items SET lastOpenedAt = :timestamp, updatedAt = :timestamp WHERE id = :id")
@@ -77,10 +78,10 @@ interface ChapterDao {
     @Query("SELECT * FROM chapters WHERE id = :chapterId")
     suspend fun getById(chapterId: String): ChapterEntity?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsert(chapter: ChapterEntity)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsertAll(chapters: List<ChapterEntity>)
 
     @Query("UPDATE chapters SET downloadState = :state, localFilePath = :localPath, contentSha256 = :sha256, updatedAt = :ts WHERE id = :chapterId")
