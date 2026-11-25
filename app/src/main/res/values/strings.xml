@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Umefor Library</string>
+    <string name="tab_library">Thư viện</string>
+    <string name="tab_explore">Khám phá</string>
+    <string name="tab_queue">Tải &amp; Đồng bộ</string>
+    <string name="tab_settings">Cài đặt</string>
+</resources>

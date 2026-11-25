@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Bóng đổ mềm giúp biểu tượng nổi khối trên nền xanh rêu đậm -->
+    <group android:translateY="1.5">
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M39.5,28 L39.5,47 C39.5,60 68.5,60 68.5,47 L68.5,28"
+            android:strokeColor="#38051210"
+            android:strokeLineCap="round"
+            android:strokeWidth="4.2" />
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M47.5,28 L47.5,47 C47.5,52 60.5,52 60.5,47 L60.5,28"
+            android:strokeColor="#38051210"
+            android:strokeLineCap="round"
+            android:strokeWidth="4.2" />
+        <path
+            android:fillColor="#38051210"
+            android:pathData="M53,66 C47,62.2 39,61.2 32,62.6 L32,72 C39,70.6 47,71.6 53,75.4 Z" />
+        <path
+            android:fillColor="#38051210"
+            android:pathData="M55,66 C61,62.2 69,61.2 76,62.6 L76,72 C69,70.6 61,71.6 55,75.4 Z" />
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M32,74.8 C39,73.4 47,74.4 54,78.2 C61,74.4 69,73.4 76,74.8"
+            android:strokeColor="#38051210"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:strokeWidth="2.4" />
+    </group>
+
+    <!-- Biểu tượng chữ U kép thương hiệu Umefor -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M39.5,28 L39.5,47 C39.5,60 68.5,60 68.5,47 L68.5,28"
+        android:strokeColor="#D4EF79"
+        android:strokeLineCap="round"
+        android:strokeWidth="4.2" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M47.5,28 L47.5,47 C47.5,52 60.5,52 60.5,47 L60.5,28"
+        android:strokeColor="#D4EF79"
+        android:strokeLineCap="round"
+        android:strokeWidth="4.2" />
+
+    <!-- Quyển sách mở (Library) đặt dưới chữ U kép -->
+    <path
+        android:fillColor="#EEF8CD"
+        android:pathData="M53,66 C47,62.2 39,61.2 32,62.6 L32,72 C39,70.6 47,71.6 53,75.4 Z" />
+    <path
+        android:fillColor="#E2F4AD"
+        android:pathData="M55,66 C61,62.2 69,61.2 76,62.6 L76,72 C69,70.6 61,71.6 55,75.4 Z" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M32,74.8 C39,73.4 47,74.4 54,78.2 C61,74.4 69,73.4 76,74.8"
+        android:strokeColor="#9CD35E"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="2.4" />
+</vector>
